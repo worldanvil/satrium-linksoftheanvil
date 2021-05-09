@@ -1,0 +1,105 @@
+##############################################################################################
+# Satrium Links Of The Anvil 1.0.0
+#---------------------------------------------------------------------------------------------
+# This stack is for WorldAnvil hosting of Satrium's Links Of The Anvil project.
+# It's Based on previous work by Satrium, and the WA-docker stack
+#---------------------------------------------------------------------------------------------
+# Links Of The Anvil is a project to display articles and element link in a WorldAnvil world.
+#---------------------------------------------------------------------------------------------
+# This file and the associated Docker stack are under
+# Copyright (c) 2021, WorldAnvil
+# The Links Of The Anvil project is under
+# Copyright (c) 2021, Anton Pohli (Satrium)
+##############################################################################################
+version: '3.8'
+
+services:
+  # Main service of the stack
+  linksoftheanvil:
+    # Explicite Container name for clarity
+    container_name: ${SERVICE_NAME}-node
+    image: "${IMAGE_NAME}:${IMAGE_TAG}"
+    environment:
+      APP_KEY: "${APP_KEY}"
+      NODE_ENV: "production"
+    # Swarm config retracted as the current docker implementation is mono-node
+    # deploy:
+    #   mode: replicated
+    #   replicas: 2
+    #   update_config:
+    #     order: start-first
+    #     parallelism: 1
+    #     monitor: 35s
+    #     failure_action: rollback
+    restart_policy:
+      condition: any
+      delay: 5s
+      max_attempts: 3
+      window: 30s.
+    networks: 
+      - frontend
+      - internal
+    labels:
+      # ----------------------------------------------------------------
+      #  START : Labels for Traefik Configuration
+      # ----------------------------------------------------------------
+      # Enabling Traefik
+      - "traefik.enable=true"
+      # Setting proxy to server network
+      - "traefik.docker.network=frontend"
+      # HTTP Configurations
+      - "traefik.http.routers.lota.rule=Host(`${SERVICE_DOMAIN}`)"
+      - "traefik.http.routers.lota.entrypoints=web"
+      # HTTPS Configurations
+      - "traefik.http.routers.lota-secure.rule=Host(`${SERVICE_DOMAIN}`)"
+      - "traefik.http.routers.lota-secure.entrypoints=web-secure"
+      - "traefik.http.routers.lota-secure.service=lota-secure@docker"
+      - "traefik.http.routers.lota-secure.tls=true"
+      - "traefik.http.routers.lota-secure.tls.certresolver=letsEncrypt"
+      # Redirection HTTP => HTTPS
+      - "traefik.http.routers.lota.middlewares=httpsRedirect"
+      # Port
+       - "traefik.http.services.lota-secure.loadbalancer.server.port=3000"
+      # ----------------------------------------------------------------
+      #  END OF : Labels for Traefik Configuration
+      # ----------------------------------------------------------------
+
+  redis:
+    image: redis:6.0.0-alpine
+    # Explicite Container name for clarity
+    container_name: ${SERVICE_NAME}-redis
+    networks:
+      - internal
+    # Swarm config retracted as the current docker implementation is mono-node
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.50'
+    #       memory: 50M
+    restart_policy:
+      condition: any
+      delay: 5s
+      max_attempts: 3
+      window: 30s.
+
+  rethinkdb:
+    image: rethinkdb:2.4.0
+    # Explicite Container name for clarity
+    container_name: ${SERVICE_NAME}-rethinkdb
+    networks:
+      - internal      
+    volumes:
+      - rethinkdb_data:/data
+    restart_policy:
+      condition: any
+      delay: 5s
+      max_attempts: 3
+      window: 30s.
+
+volumes: 
+  rethinkdb_data:
+
+networks:
+  frontend:
+    external: true
+  internal: 
